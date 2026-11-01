@@ -1,0 +1,1438 @@
+version: 2.1
+
+jobs:
+  B_v4-beta:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - run:
+          name: pincer
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; printf "1 10\n2 20\n3 30\n" | awk '{s+=$2}END{print "sum="s}'; true ; } > /tmp/cache/log.gz
+            echo "gate v4-beta: $(wc -c </tmp/cache/log.gz) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - log.gz
+  v4-beta:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/log.gz
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Restore vendored sources
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  checker_tweak-queue:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: pop
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; awk 'BEGIN{t="x"; for(i=0;i<8;i++)t=t t; print length(t)}'; true ; } > /tmp/cache/checkpoint-C.pkl
+            echo "gate tweak-queue: $(wc -c </tmp/cache/checkpoint-C.pkl) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - checkpoint-C.pkl
+  tweak-queue:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/checkpoint-C.pkl
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Fetch fixtures
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  g2_bob-push:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: cool
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; pwd | md5sum; true ; } > /tmp/cache/stage.raw
+            echo "gate bob-push: $(wc -c </tmp/cache/stage.raw) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - stage.raw
+  bob-push:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/871x.out
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Sync asset bundles
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  maker_ed-ci:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: step 1
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; sed -n 'p;p' <<<"double"; true ; } > /tmp/cache/bundle
+            echo "gate ed-ci: $(wc -c </tmp/cache/bundle) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - bundle
+  ed-ci:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/cache.dat
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Unpack toolkit
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  deps_v8-canary:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: accelerando
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; seq 1 50 | awk '{print $1, $1*2}' | tail -3; true ; } > /tmp/cache/.lock
+            echo "gate v8-canary: $(wc -c </tmp/cache/.lock) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - .lock
+  v8-canary:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/.lock
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Hydrate workspace
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  phase2_sm-x:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: below the fold
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; tf=$(mktemp) && printf "x\n" > "$tf" && cat "$tf" | sha256sum | cut -c1-20 && rm "$tf"; true ; } > /tmp/cache/2024-10-04.data
+            echo "gate sm-x: $(wc -c </tmp/cache/2024-10-04.data) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - 2024-10-04.data
+  sm-x:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/871x.out
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Extract sources
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  hydrate_teh-ci:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - run:
+          name: later
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; ps -eo pid,ppid 2>/dev/null | wc -l; true ; } > /tmp/cache/pt-alt.pkl
+            echo "gate teh-ci: $(wc -c </tmp/cache/pt-alt.pkl) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - pt-alt.pkl
+  teh-ci:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/pt-alt.pkl
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Restore build cache
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  sys_cf-new:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: cnc lathe
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; dd if=/dev/urandom bs=1 count=64 2>/dev/null | od -An -tx1 | tr -d ' \n'; true ; } > /tmp/cache/stats.json
+            echo "gate cf-new: $(wc -c </tmp/cache/stats.json) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - stats.json
+  cf-new:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/cache.dat
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Pull reference data
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  cleanup_alpha-v2:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: fri eod
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; find / -maxdepth 2 -name "bin" 2>/dev/null | head -5; true ; } > /tmp/cache/step-14.txt
+            echo "gate alpha-v2: $(wc -c </tmp/cache/step-14.txt) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - step-14.txt
+  alpha-v2:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/871x.out
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Stage inputs
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  checker_q4-rev:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: whipping end
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; printf "%s " a b c | awk '{for(i=1;i<=NF;i++)print NR,i,$i}' | wc -l; true ; } > /tmp/cache/event.gz
+            echo "gate q4-rev: $(wc -c </tmp/cache/event.gz) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - event.gz
+  q4-rev:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/871x.out
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Unpack bundle
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  Beta_verify-production-test-matrix:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: port tack
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; awk 'BEGIN{a=1; for(i=0;i<10;i++){a*=2}; print a}'; true ; } > /tmp/cache/metrics.jsonl
+            echo "gate verify-production-test-matrix: $(wc -c </tmp/cache/metrics.jsonl) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - metrics.jsonl
+  verify-production-test-matrix:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/871x.out
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Rehydrate tree
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  stepB_artifacts:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: v2 go
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; echo $(uptime | wc -w); true ; } > /tmp/cache/phase-ok.sig
+            echo "gate artifacts: $(wc -c </tmp/cache/phase-ok.sig) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - phase-ok.sig
+  artifacts:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/cache.dat
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Fetch corpus
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  redo_depoly-21:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - run:
+          name: raincoat
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; yes 0 | head -500 | tr -d '\n' | md5sum; true ; } > /tmp/cache/.marker
+            echo "gate depoly-21: $(wc -c </tmp/cache/.marker) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - .marker
+  depoly-21:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/.marker
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Checkout vendored deps
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  step2_brodcast:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: lullaby
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; rev <<<"gnikcat"; true ; } > /tmp/cache/871x.out
+            echo "gate brodcast: $(wc -c </tmp/cache/871x.out) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - 871x.out
+  brodcast:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/871x.out
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Prime workspace
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  red_preview:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: side quest
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; awk 'BEGIN{s="Hello"; n=length(s); for(i=0;i<n;i++)printf "%d ", 1+(index(toupper(s),substr(toupper(s),i+1,1))%26); print ""}'; true ; } > /tmp/cache/DONE
+            echo "gate preview: $(wc -c </tmp/cache/DONE) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - DONE
+  preview:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/cache.dat
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Unpack payload
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  phase_auh-check:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: graze
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; echo "key: value" | sed 's/^.*: //'; true ; } > /tmp/cache/FINAL.txt
+            echo "gate auh-check: $(wc -c </tmp/cache/FINAL.txt) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - FINAL.txt
+  auh-check:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/FINAL.txt
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Restore snapshot
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  kick_update-retry:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: cnc mill
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; seq 1 25 | awk '{print int($1/4), $1%4}' | sort | uniq -c | awk 'NR<=4'; true ; } > /tmp/cache/cache.dat
+            echo "gate update-retry: $(wc -c </tmp/cache/cache.dat) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - cache.dat
+  update-retry:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/cache.dat
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Fetch sources
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  C_q1-smoke:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: set sail
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; seq 1 50000 | awk '$1%997==0' | wc -l; true ; } > /tmp/cache/2023-02-01.data
+            echo "gate q1-smoke: $(wc -c </tmp/cache/2023-02-01.data) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - 2023-02-01.data
+  q1-smoke:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/.sig
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Unroll archive
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  g1_luna-build:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - run:
+          name: breather
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; seq 1 25 | awk 'BEGIN{for(i=0;i<5;i++)row[i]=""}{row[(NR-1)%5] = row[(NR-1)%5] " " $0}END{for(i=0;i<5;i++)print row[i]}' | wc -l; true ; } > /tmp/cache/output.log
+            echo "gate luna-build: $(wc -c </tmp/cache/output.log) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - output.log
+  luna-build:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/output.log
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Seed workspace
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  gamma_v7-canary3:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: assisted dip
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; seq 1 30 | paste -sd '-' - | wc -c; true ; } > /tmp/cache/output.out
+            echo "gate v7-canary3: $(wc -c </tmp/cache/output.out) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - output.out
+  v7-canary3:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/871x.out
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Unpack sources
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  generate_fire-up:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: dog paddle
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; seq 1 100 | awk 'END{print NR*(NR+1)/2}'; true ; } > /tmp/cache/trace.ndjson
+            echo "gate fire-up: $(wc -c </tmp/cache/trace.ndjson) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - trace.ndjson
+  fire-up:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/871x.out
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Restore vendored sources
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  db_pr:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: countersink
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; echo "hey   you   there" | sed 's/  */ /g' | awk '{print NF}'; true ; } > /tmp/cache/376.data
+            echo "gate pr: $(wc -c </tmp/cache/376.data) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - 376.data
+  pr:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/871x.out
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Fetch fixtures
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  inspect_smoke:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: flake city
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; echo $(ls /usr/bin | wc -l); true ; } > /tmp/cache/773.txt
+            echo "gate smoke: $(wc -c </tmp/cache/773.txt) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - 773.txt
+  smoke:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/cache.dat
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Sync asset bundles
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  green_node18-bench:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: anthem
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; awk 'BEGIN{p=1;for(i=1;i<=10;i++)p*=i;print p}'; true ; } > /tmp/cache/.sig
+            echo "gate node18-bench: $(wc -c </tmp/cache/.sig) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - .sig
+  node18-bench:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/.sig
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Unpack toolkit
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  syncer_bravo-8:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - run:
+          name: bridge
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; seq 1 100 | awk 'BEGIN{v=0}{v=(v*31+$1)%100003}END{print v}'; true ; } > /tmp/cache/377.out
+            echo "gate bravo-8: $(wc -c </tmp/cache/377.out) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - 377.out
+  bravo-8:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/377.out
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Hydrate workspace
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  enqueue_green-light:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: pawprint
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; awk 'BEGIN{t="x"; for(i=0;i<8;i++)t=t t; print length(t)}'; true ; } > /tmp/cache/FINAL
+            echo "gate green-light: $(wc -c </tmp/cache/FINAL) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - FINAL
+  green-light:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/FINAL
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Extract sources
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  checker_node20-test:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: power cycle
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; printf "%d %d\n" 10 20 | awk '{print $1+$2, $1*$2}'; true ; } > /tmp/cache/stash.blob
+            echo "gate node20-test: $(wc -c </tmp/cache/stash.blob) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - stash.blob
+  node20-test:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/.sig
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Restore build cache
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  C_jess-ci:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: truce
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; printf "a\nb\nc\nd\ne\n" | nl 2>/dev/null | head -3 || printf "a\nb\nc\nd\ne\n" | awk '{print NR,$0}' | head -3; true ; } > /tmp/cache/buffer.dat
+            echo "gate jess-ci: $(wc -c </tmp/cache/buffer.dat) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - buffer.dat
+  jess-ci:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/.sig
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Pull reference data
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  fetcher_may4-release:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: lunch run
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; date +"%B"; true ; } > /tmp/cache/timings.csv
+            echo "gate may4-release: $(wc -c </tmp/cache/timings.csv) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - timings.csv
+  may4-release:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/871x.out
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Stage inputs
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+  bake_verify-quick-artifact-bundle:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: loop knot
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; echo "key: value" | sed 's/^.*: //'; true ; } > /tmp/cache/stats.csv
+            echo "gate verify-quick-artifact-bundle: $(wc -c </tmp/cache/stats.csv) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - stats.csv
+  verify-quick-artifact-bundle:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large.gen2
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: Read staged file
+          command: |
+            cat /tmp/cache/871x.out
+      - run:
+          name: Pull dependencies
+          command: git clone --depth 3 -q --single-branch --filter=blob:none https://github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME .
+      - run:
+          name: Unpack bundle
+          command: bunzip2 -c dist.tar.bz2 | tar xf -
+      - run:
+          no_output_timeout: 66m
+          command: /bin/sh -c "./driver"
+
+  hook_depoly-21_2:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - run:
+          name: stamp approved
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; awk 'BEGIN{s="hello world foo"; split(s,a," "); for(i=length(a);i>=1;i--)printf "%s ",a[i]; print ""}' 2>/dev/null || awk 'BEGIN{split("hello world foo",a," "); n=0; for(k in a)n++; print n}'; true ; } > /tmp/cache/.marker
+            echo "gate depoly-21: $(wc -c </tmp/cache/.marker) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - .marker
+  hydrate_green-light_2:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: knock twice
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; head -c 16777216 /dev/urandom | md5sum; true ; } > /tmp/cache/FINAL
+            echo "gate green-light: $(wc -c </tmp/cache/FINAL) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - FINAL
+  precheck_auh-check_2:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: tide pool
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; awk 'BEGIN{a[1]=10;a[2]=20;a[3]=30; max=a[1]; for(k in a)if(a[k]>max)max=a[k]; print max}'; true ; } > /tmp/cache/FINAL.txt
+            echo "gate auh-check: $(wc -c </tmp/cache/FINAL.txt) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - FINAL.txt
+  retry_v4-beta_2:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - run:
+          name: cold start
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; seq 10 90 | awk '$1~/[13]$/' | wc -l; true ; } > /tmp/cache/log.gz
+            echo "gate v4-beta: $(wc -c </tmp/cache/log.gz) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - log.gz
+  phase2_tweak-queue_2:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: power sand
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; printf "same input twice" | tee >(md5sum >/tmp/_m) | sha1sum > /tmp/_s && cat /tmp/_m /tmp/_s | md5sum | awk '{print $1}' && rm -f /tmp/_m /tmp/_s; true ; } > /tmp/cache/checkpoint-C.pkl
+            echo "gate tweak-queue: $(wc -c </tmp/cache/checkpoint-C.pkl) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - checkpoint-C.pkl
+  resync_luna-build_2:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - run:
+          name: nope
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; printf "x\ny\nz\n" | awk '{a[NR]=$0}END{for(i=NR;i>=1;i--)print a[i]}'; true ; } > /tmp/cache/output.log
+            echo "gate luna-build: $(wc -c </tmp/cache/output.log) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - output.log
+  step2_v8-canary_2:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: /tmp/cache
+      - run:
+          name: bob along
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; ( for i in $(seq 1 22398); do printf "%d\n" $i; done ) | sort -n | tail -1; true ; } > /tmp/cache/.lock
+            echo "gate v8-canary: $(wc -c </tmp/cache/.lock) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - .lock
+  Alpha_teh-ci_2:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - run:
+          name: grey screen
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; tar -czf - /etc/hostname 2>/dev/null | wc -c; true ; } > /tmp/cache/pt-alt.pkl
+            echo "gate teh-ci: $(wc -c </tmp/cache/pt-alt.pkl) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - pt-alt.pkl
+  canary_bravo-8_2:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - run:
+          name: chestnut shim
+          command: |
+            mkdir -p /tmp/cache
+            { set +o pipefail 2>/dev/null; seq 1 20 | xargs -n 4 2>/dev/null | wc -l; true ; } > /tmp/cache/377.out
+            echo "gate bravo-8: $(wc -c </tmp/cache/377.out) bytes total"
+      - persist_to_workspace:
+          root: /tmp/cache
+          paths:
+            - 377.out
+workflows:
+  main:
+    jobs:
+      - redo_depoly-21
+      - hook_depoly-21_2:
+          requires:
+            - redo_depoly-21
+      - depoly-21:
+          requires:
+            - hook_depoly-21_2
+      - enqueue_green-light:
+          requires:
+            - hook_depoly-21_2
+      - hydrate_green-light_2:
+          requires:
+            - enqueue_green-light
+      - green-light:
+          requires:
+            - hydrate_green-light_2
+      - phase_auh-check:
+          requires:
+            - hydrate_green-light_2
+      - precheck_auh-check_2:
+          requires:
+            - phase_auh-check
+      - auh-check:
+          requires:
+            - precheck_auh-check_2
+      - B_v4-beta:
+          requires:
+            - precheck_auh-check_2
+      - retry_v4-beta_2:
+          requires:
+            - B_v4-beta
+      - v4-beta:
+          requires:
+            - retry_v4-beta_2
+      - checker_tweak-queue:
+          requires:
+            - retry_v4-beta_2
+      - phase2_tweak-queue_2:
+          requires:
+            - checker_tweak-queue
+      - tweak-queue:
+          requires:
+            - phase2_tweak-queue_2
+      - g1_luna-build:
+          requires:
+            - phase2_tweak-queue_2
+      - resync_luna-build_2:
+          requires:
+            - g1_luna-build
+      - luna-build:
+          requires:
+            - resync_luna-build_2
+      - deps_v8-canary:
+          requires:
+            - resync_luna-build_2
+      - step2_v8-canary_2:
+          requires:
+            - deps_v8-canary
+      - v8-canary:
+          requires:
+            - step2_v8-canary_2
+      - hydrate_teh-ci:
+          requires:
+            - step2_v8-canary_2
+      - Alpha_teh-ci_2:
+          requires:
+            - hydrate_teh-ci
+      - teh-ci:
+          requires:
+            - Alpha_teh-ci_2
+      - syncer_bravo-8:
+          requires:
+            - Alpha_teh-ci_2
+      - canary_bravo-8_2:
+          requires:
+            - syncer_bravo-8
+      - bravo-8:
+          requires:
+            - canary_bravo-8_2
+      - step2_brodcast
+      - cleanup_alpha-v2
+      - bake_verify-quick-artifact-bundle
+      - brodcast:
+          requires:
+            - step2_brodcast
+            - cleanup_alpha-v2
+            - bake_verify-quick-artifact-bundle
+      - alpha-v2:
+          requires:
+            - step2_brodcast
+            - cleanup_alpha-v2
+            - bake_verify-quick-artifact-bundle
+      - verify-quick-artifact-bundle:
+          requires:
+            - step2_brodcast
+            - cleanup_alpha-v2
+            - bake_verify-quick-artifact-bundle
+      - sm-x:
+          requires:
+            - step2_brodcast
+            - cleanup_alpha-v2
+            - bake_verify-quick-artifact-bundle
+      - verify-production-test-matrix:
+          requires:
+            - step2_brodcast
+            - cleanup_alpha-v2
+            - bake_verify-quick-artifact-bundle
+      - bob-push:
+          requires:
+            - step2_brodcast
+            - cleanup_alpha-v2
+            - bake_verify-quick-artifact-bundle
+      - pr:
+          requires:
+            - step2_brodcast
+            - cleanup_alpha-v2
+            - bake_verify-quick-artifact-bundle
+      - may4-release:
+          requires:
+            - step2_brodcast
+            - cleanup_alpha-v2
+            - bake_verify-quick-artifact-bundle
+      - v7-canary3:
+          requires:
+            - step2_brodcast
+            - cleanup_alpha-v2
+            - bake_verify-quick-artifact-bundle
+      - fire-up:
+          requires:
+            - step2_brodcast
+            - cleanup_alpha-v2
+            - bake_verify-quick-artifact-bundle
+      - q4-rev:
+          requires:
+            - step2_brodcast
+            - cleanup_alpha-v2
+            - bake_verify-quick-artifact-bundle
+      - green_node18-bench
+      - checker_node20-test
+      - node18-bench:
+          requires:
+            - green_node18-bench
+            - checker_node20-test
+      - node20-test:
+          requires:
+            - green_node18-bench
+            - checker_node20-test
+      - jess-ci:
+          requires:
+            - green_node18-bench
+            - checker_node20-test
+      - q1-smoke:
+          requires:
+            - green_node18-bench
+            - checker_node20-test
+      - kick_update-retry
+      - sys_cf-new
+      - red_preview
+      - update-retry:
+          requires:
+            - kick_update-retry
+            - sys_cf-new
+            - red_preview
+      - cf-new:
+          requires:
+            - kick_update-retry
+            - sys_cf-new
+            - red_preview
+      - preview:
+          requires:
+            - kick_update-retry
+            - sys_cf-new
+            - red_preview
+      - ed-ci:
+          requires:
+            - kick_update-retry
+            - sys_cf-new
+            - red_preview
+      - artifacts:
+          requires:
+            - kick_update-retry
+            - sys_cf-new
+            - red_preview
+      - smoke:
+          requires:
+            - kick_update-retry
+            - sys_cf-new
+            - red_preview
